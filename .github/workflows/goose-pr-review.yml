@@ -1,0 +1,88 @@
+name: Goose AI PR Review  
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+  
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  PROVIDER_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+  PR_NUMBER: ${{ github.event.pull_request.number }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  goose-comment:
+    name: Goose Comment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gather PR information
+        run: |
+          {
+            echo "# Files Changed"
+            gh pr view "$PR_NUMBER" --json files \
+              -q '.files[] | "* " + .path + " (" + (.additions|tostring) + " additions, " + (.deletions|tostring) + " deletions)"'
+            echo ""
+            echo "# Changes Summary"
+            gh pr diff "$PR_NUMBER"
+          } > changes.txt
+
+      - name: Install Goose CLI
+        run: |
+          mkdir -p /home/runner/.local/bin
+          curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh \
+            | CONFIGURE=false INSTALL_PATH=/home/runner/.local/bin bash
+          echo "/home/runner/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure Goose
+        run: |
+          mkdir -p ~/.config/goose
+          cat > ~/.config/goose/config.yaml <<'EOF'
+          GOOSE_PROVIDER: google
+          GOOSE_MODEL: gemini-2.0-flash-exp
+          keyring: false
+          EOF
+
+      - name: Prepare review instructions
+        run: |
+          # Read custom instructions from repository
+          cat .goose/instructions.txt > review_instructions.txt
+          echo "" >> review_instructions.txt
+          echo "The changes to review are:" >> review_instructions.txt
+          cat changes.txt >> review_instructions.txt
+
+      - name: Run Goose AI review
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} 
+        run: |
+          goose run --instructions review_instructions.txt \
+          | sed -E 's/\x1B\[[0-9;]*[mK]//g' \
+          | grep -v "logging to /home/runner/.config/goose/sessions/" \
+          | grep -v "^starting session" \
+          | grep -v "^Closing session" \
+          | sed 's/[[:space:]]*$//' \
+          > pr_comment.txt
+
+      - name: Post AI review to PR
+        run: |
+          {
+            echo "## 🤖 AI Code Review"
+            echo "*Automated review by Goose + Google Gemini*"
+            echo ""
+            cat pr_comment.txt
+            echo ""
+            echo "---"
+            echo "*This review was automatically generated. Use human judgment for final decisions.*"
+          } > final_comment.txt
+          
+          gh pr comment "$PR_NUMBER" --body-file final_comment.txt
+
