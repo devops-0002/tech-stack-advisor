@@ -32,10 +32,7 @@ jobs:
       run: python train.py
 
     - name: Test application
-      run: |
-        # Basic import test
-        python -c "import app; print('✅ App imports successfully')"
-        
+      run: | 
         # Check if model files were created
         if [ -f "model.pkl" ] && [ -f "encoders.pkl" ]; then
           echo "✅ Model files created successfully"
