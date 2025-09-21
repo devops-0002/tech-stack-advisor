@@ -16,21 +16,26 @@ RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
     apt-get update && apt-get install -y \
     gcc \
-    python3-dev
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Use cache mount for pip packages
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user -r requirements.txt
 
-# Stage 2: Model training stage
+# Stage 2: Model training stage (only if models don't exist)
 FROM dependencies AS trainer
 
+# Copy training script
 COPY train.py .
 
-# Train the model with cache mount for any downloads
-RUN --mount=type=cache,target=/tmp \
-    python train.py
+# Check if models exist, if not train them
+RUN if [ ! -f "model.pkl" ] || [ ! -f "encoders.pkl" ]; then \
+        echo "Training models..." && python train.py; \
+    else \
+        echo "Models already exist, skipping training..."; \
+    fi
 
 # Stage 3: Final production stage
 FROM --platform=$TARGETPLATFORM python:3.11-slim AS production
@@ -50,8 +55,8 @@ COPY --from=dependencies /root/.local /home/mluser/.local
 COPY app.py .
 COPY requirements.txt .
 
-# Copy trained models from trainer stage
-COPY --from=trainer /app/*.pkl ./
+# Copy trained models (either from CI artifacts or trainer stage)
+COPY --from=trainer /app/*.pkl ./ 2>/dev/null || COPY *.pkl ./
 
 # Set proper ownership
 RUN chown -R mluser:mluser /app
