@@ -1,0 +1,10 @@
+# .trivyignore
+# Trivy ignore file for known false positives or accepted risks
+
+# Example: Ignore specific CVE that doesn't affect our use case
+# CVE-2023-12345
+
+# Example: Ignore vulnerabilities in specific packages
+# pkg:pypi/package-name@version
+
+# Note: Only ignore vulnerabilities after proper risk assessment
