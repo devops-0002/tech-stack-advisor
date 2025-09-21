@@ -176,7 +176,7 @@ jobs:
           echo "| Status | ✅ Review Posted |" >> $GITHUB_STEP_SUMMARY
 
       - name: 💾 Upload review artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ai-review-artifacts
           path: |
