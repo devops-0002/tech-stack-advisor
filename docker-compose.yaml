@@ -1,0 +1,14 @@
+services:
+  tech-stack-advisor:
+    build: .
+    ports:
+      - "7860:7860"
+    environment:
+      - ENV=production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7860', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
