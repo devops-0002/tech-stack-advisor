@@ -143,7 +143,7 @@ jobs:
         trivy image \
           --format sarif \
           --output trivy-results.sarif \
-          ${{ steps.extract-tag.outputs.image-tag }}
+          ${{ env.IMAGE_NAME }}:latest
 
     - name: Run Trivy vulnerability scan (table format)
       run: |
@@ -151,7 +151,7 @@ jobs:
         trivy image \
           --format table \
           --output trivy-results.txt \
-          ${{ steps.extract-tag.outputs.image-tag }}
+          ${{ env.IMAGE_NAME }}:latest
 
     - name: Generate SBOM with Trivy
       run: |
@@ -159,7 +159,7 @@ jobs:
         trivy image \
           --format spdx-json \
           --output sbom.spdx.json \
-          ${{ steps.extract-tag.outputs.image-tag }}
+          ${{ env.IMAGE_NAME }}:latest
 
     - name: Check for HIGH and CRITICAL vulnerabilities
       id: vuln-check
@@ -167,8 +167,8 @@ jobs:
         echo "🚨 Checking for HIGH/CRITICAL vulnerabilities..."
         
         # Count HIGH and CRITICAL vulnerabilities
-        HIGH_COUNT=$(trivy image --format json ${{ steps.extract-tag.outputs.image-tag }} | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length')
-        CRITICAL_COUNT=$(trivy image --format json ${{ steps.extract-tag.outputs.image-tag }} | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length')
+        HIGH_COUNT=$(trivy image --format json ${{ env.IMAGE_NAME }}:latest | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length')
+        CRITICAL_COUNT=$(trivy image --format json ${{ env.IMAGE_NAME }}:latest | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length')
         
         echo "high-count=$HIGH_COUNT" >> $GITHUB_OUTPUT
         echo "critical-count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
