@@ -1,4 +1,4 @@
-name: Goose
+name: 🤖 AI-Powered PR Review
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   issues: write
 
@@ -16,70 +16,171 @@ env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
-  goose-comment:
-    name: Goose Comment
+  goose-ai-review:
+    name: 🧠 Goose AI Code Review
     runs-on: ubuntu-latest
+    
+    # Skip if PR is from dependabot or other bots
+    if: github.actor != 'dependabot[bot]'
+    
     steps:
-      - name: Check out repository
+      - name: 📥 Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Gather PR information
+      - name: 📊 Gather PR information
         run: |
+          echo "🔍 Analyzing Pull Request #$PR_NUMBER..."
+          
+          # Create comprehensive PR analysis
           {
-            echo "# Files Changed"
-            gh pr view "$PR_NUMBER" --json files \
-              -q '.files[] | "* " + .path + " (" + (.additions|tostring) + " additions, " + (.deletions|tostring) + " deletions)"'
+            echo "# Pull Request Analysis"
+            echo "**PR #$PR_NUMBER**: $(gh pr view "$PR_NUMBER" --json title -q '.title')"
+            echo "**Author**: $(gh pr view "$PR_NUMBER" --json author -q '.author.login')"
+            echo "**Base Branch**: $(gh pr view "$PR_NUMBER" --json baseRefName -q '.baseRefName')"
+            echo "**Head Branch**: $(gh pr view "$PR_NUMBER" --json headRefName -q '.headRefName')"
             echo ""
-            echo "# Changes Summary"
+            echo "## Files Changed"
+            gh pr view "$PR_NUMBER" --json files \
+              -q '.files[] | "* **" + .path + "** (" + (.additions|tostring) + " additions, " + (.deletions|tostring) + " deletions)"'
+            echo ""
+            echo "## Changes Summary"
+            echo '```diff'
             gh pr diff "$PR_NUMBER"
-          } > changes.txt
+            echo '```'
+          } > pr_analysis.txt
+          
+          # Display what we gathered
+          echo "📋 Generated PR analysis:"
+          head -20 pr_analysis.txt
 
-      - name: Install Goose CLI
+      - name: 🛠️ Install Goose CLI
         run: |
+          echo "🚀 Installing Goose CLI..."
           mkdir -p /home/runner/.local/bin
           curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh \
             | CONFIGURE=false INSTALL_PATH=/home/runner/.local/bin bash
           echo "/home/runner/.local/bin" >> "$GITHUB_PATH"
+          
+          # Verify installation
+          /home/runner/.local/bin/goose --version
 
-      - name: Configure Goose
+      - name: ⚙️ Configure Goose
         run: |
+          echo "🔧 Configuring Goose with Google Gemini..."
           mkdir -p ~/.config/goose
           cat > ~/.config/goose/config.yaml <<'EOF'
           GOOSE_PROVIDER: google
           GOOSE_MODEL: gemini-2.0-flash-exp
           keyring: false
           EOF
+          
+          echo "📋 Goose configuration:"
+          cat ~/.config/goose/config.yaml
 
-      - name: Create instructions for Goose
+      - name: 📝 Create AI review instructions
         run: |
-          cat > instructions.txt <<'EOF'
-          Create a summary of the changes provided. Don't provide any session or logging details.
-          The summary for each file should be brief and structured as:
-          <filename/path (wrapped in backticks)>
-             - dot points of changes
-          You don't need any extensions, don't mention extensions at all.
-          The changes to summarise are:
+          cat > ai_instructions.txt <<'EOF'
+          You are an expert code reviewer analyzing a pull request for a machine learning application. 
+
+          Please provide a comprehensive but concise review of the changes with the following structure:
+
+          ## 🔍 Code Review Summary
+          
+          Provide a brief overview of what this PR accomplishes.
+
+          ## 📁 File Analysis
+          
+          For each changed file, provide:
+          `filename/path`
+          - Brief description of changes
+          - Any notable improvements or concerns
+          - Suggestions if applicable
+
+          ## 🚀 Recommendations
+          
+          - **Positive aspects**: What's done well
+          - **Suggestions**: Areas for improvement
+          - **Security considerations**: Any security implications
+          - **Performance impact**: Expected performance changes
+
+          ## 🎯 Overall Assessment
+          
+          Provide an overall assessment: Approve, Request Changes, or Comment with reasoning.
+
+          Focus on:
+          - Code quality and best practices
+          - Security implications
+          - Performance considerations
+          - Maintainability
+          - Docker/containerization best practices
+          - CI/CD pipeline improvements
+
+          Keep the review constructive, specific, and helpful. Avoid generic comments.
+
+          The changes to analyze are:
           EOF
-          cat changes.txt >> instructions.txt
+          
+          # Append the PR analysis
+          cat pr_analysis.txt >> ai_instructions.txt
 
-      - name: Test
-        run: cat instructions.txt
-
-      - name: Run Goose and filter output
+      - name: 🤖 Run Goose AI Analysis
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} 
         run: |
-          goose run --instructions instructions.txt \
+          echo "🧠 Running AI-powered code review..."
+          
+          # Run Goose and capture output
+          goose run --instructions ai_instructions.txt \
           | sed -E 's/\x1B\[[0-9;]*[mK]//g' \
           | grep -v "logging to /home/runner/.config/goose/sessions/" \
           | grep -v "^starting session" \
           | grep -v "^Closing session" \
           | sed 's/[[:space:]]*$//' \
-          > pr_comment.txt
+          > ai_review.txt
+          
+          echo "✅ AI review generated successfully"
 
-      - name: Post comment to PR
+      - name: 📤 Post AI review to PR
         run: |
-          cat -A pr_comment.txt
-          gh pr comment "$PR_NUMBER" --body-file pr_comment.txt
+          echo "📬 Posting AI review to PR #$PR_NUMBER..."
+          
+          # Add header to the review
+          {
+            echo "## 🤖 AI-Powered Code Review"
+            echo "*Automated review generated by Goose + Google Gemini*"
+            echo ""
+            echo "---"
+            echo ""
+            cat ai_review.txt
+            echo ""
+            echo "---"
+            echo "*This review was automatically generated. Please use human judgment for final decisions.*"
+          } > final_review.txt
+          
+          # Post the review
+          gh pr comment "$PR_NUMBER" --body-file final_review.txt
+          
+          echo "✅ AI review posted successfully!"
+
+      - name: 📊 Generate review summary
+        run: |
+          echo "## 🤖 AI Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PR Number | #$PR_NUMBER |" >> $GITHUB_STEP_SUMMARY
+          echo "| AI Model | Google Gemini 2.0 Flash |" >> $GITHUB_STEP_SUMMARY
+          echo "| Review Tool | Goose CLI |" >> $GITHUB_STEP_SUMMARY
+          echo "| Files Analyzed | $(gh pr view "$PR_NUMBER" --json files -q '.files | length') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ✅ Review Posted |" >> $GITHUB_STEP_SUMMARY
+
+      - name: 💾 Upload review artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ai-review-artifacts
+          path: |
+            pr_analysis.txt
+            ai_instructions.txt
+            ai_review.txt
+            final_review.txt
